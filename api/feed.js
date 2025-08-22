@@ -43,8 +43,11 @@ export default async (req, res) => {
 
     const feedJson = await feedRes.json();
 
+    // ✅ Extract CDN base dynamically
+    const cdnBase = url.replace(/feed\.json.*/, "");
+
     res.setHeader("Content-Type", "application/json");
-    res.status(200).json(feedJson);
+    res.status(200).json({ ...feedJson, cdnBase });
   } catch (err) {
     console.error("❌ Error fetching feed.json:", err);
     res.status(500).json({ error: err.message });

@@ -25,7 +25,22 @@ function parseCookies(req) {
   return list;
 }
 
-// ✅ Step 1: Ask Shopify for staged upload URL
+// ✅ Shopify GraphQL helper
+async function shopifyQuery(query, variables = {}) {
+  const res = await fetch(SHOPIFY_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": SHOPIFY_TOKEN
+    },
+    body: JSON.stringify({ query, variables })
+  });
+  const json = await res.json();
+  if (json.errors) throw new Error("Shopify error: " + JSON.stringify(json.errors));
+  return json.data;
+}
+
+// ✅ Get staged upload URL
 async function getStagedUpload(filename, mimeType) {
   const query = `
     mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
@@ -39,60 +54,27 @@ async function getStagedUpload(filename, mimeType) {
       }
     }
   `;
-
   const variables = {
-    input: [
-      {
-        filename,
-        mimeType,
-        resource: "FILE",
-        httpMethod: "POST"
-      }
-    ]
+    input: [{ filename, mimeType, resource: "FILE", httpMethod: "POST" }]
   };
-
-  const res = await fetch(SHOPIFY_API, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": SHOPIFY_TOKEN
-    },
-    body: JSON.stringify({ query, variables })
-  });
-
-  const json = await res.json();
-  if (json.errors) {
-    throw new Error("Shopify GraphQL error: " + JSON.stringify(json.errors));
+  const data = await shopifyQuery(query, variables);
+  if (data.stagedUploadsCreate.userErrors.length) {
+    throw new Error("Staged upload error: " + JSON.stringify(data.stagedUploadsCreate.userErrors));
   }
-  if (json.data.stagedUploadsCreate.userErrors.length) {
-    throw new Error(
-      "Shopify staged upload error: " +
-        JSON.stringify(json.data.stagedUploadsCreate.userErrors)
-    );
-  }
-
-  return json.data.stagedUploadsCreate.stagedTargets[0];
+  return data.stagedUploadsCreate.stagedTargets[0];
 }
 
-// ✅ Step 2: Upload file to Shopify’s S3
+// ✅ Upload to S3
 async function uploadToS3(stagedTarget, filePath) {
   const formData = new FormData();
   stagedTarget.parameters.forEach((p) => formData.append(p.name, p.value));
   formData.append("file", new Blob([fs.readFileSync(filePath)]));
-
-  const res = await fetch(stagedTarget.url, {
-    method: "POST",
-    body: formData
-  });
-
-  if (!res.ok) {
-    throw new Error("S3 upload failed: " + (await res.text()));
-  }
-
+  const res = await fetch(stagedTarget.url, { method: "POST", body: formData });
+  if (!res.ok) throw new Error("S3 upload failed: " + (await res.text()));
   return stagedTarget.resourceUrl;
 }
 
-// ✅ Step 3: Register file in Shopify (IMAGE or FILE)
+// ✅ Create file in Shopify
 async function createShopifyFile(resourceUrl, alt, type = "IMAGE") {
   const query = `
     mutation fileCreate($files: [FileCreateInput!]!) {
@@ -106,74 +88,52 @@ async function createShopifyFile(resourceUrl, alt, type = "IMAGE") {
       }
     }
   `;
-
   const variables = {
-    files: [
-      {
-        alt,
-        contentType: type, // IMAGE or FILE
-        originalSource: resourceUrl
-      }
-    ]
+    files: [{ alt, contentType: type, originalSource: resourceUrl }]
   };
-
-  const res = await fetch(SHOPIFY_API, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": SHOPIFY_TOKEN
-    },
-    body: JSON.stringify({ query, variables })
-  });
-
-  const json = await res.json();
-  console.log("📤 Shopify fileCreate response:", JSON.stringify(json, null, 2));
-
-  if (json.errors) {
-    throw new Error("Shopify GraphQL error: " + JSON.stringify(json.errors));
+  const data = await shopifyQuery(query, variables);
+  if (data.fileCreate.userErrors.length) {
+    throw new Error("fileCreate error: " + JSON.stringify(data.fileCreate.userErrors));
   }
-  if (!json.data || !json.data.fileCreate) {
-    throw new Error("Invalid Shopify response: " + JSON.stringify(json));
-  }
-  if (json.data.fileCreate.userErrors.length) {
-    throw new Error(
-      "Shopify fileCreate error: " +
-        JSON.stringify(json.data.fileCreate.userErrors)
-    );
-  }
-
-  return json.data.fileCreate.files[0];
+  return data.fileCreate.files[0];
 }
 
-// ✅ Step 4: Try to fetch existing feed.json from Shopify
+// ✅ Delete existing feed.json
+async function deleteExistingFeed() {
+  const query = `
+    {
+      files(first: 1, query: "filename:feed.json") {
+        edges { node { id } }
+      }
+    }
+  `;
+  const data = await shopifyQuery(query);
+  const id = data.files.edges[0]?.node?.id;
+  if (id) {
+    const delQuery = `
+      mutation fileDelete($id: ID!) {
+        fileDelete(id: $id) {
+          deletedFileId
+          userErrors { field message }
+        }
+      }
+    `;
+    await shopifyQuery(delQuery, { id });
+  }
+}
+
+// ✅ Fetch existing feed.json
 async function fetchExistingFeed() {
   const query = `
     {
       files(first: 1, query: "filename:feed.json") {
-        edges {
-          node {
-            ... on GenericFile {
-              url
-            }
-          }
-        }
+        edges { node { ... on GenericFile { url } } }
       }
     }
   `;
-
-  const res = await fetch(SHOPIFY_API, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": SHOPIFY_TOKEN
-    },
-    body: JSON.stringify({ query })
-  });
-
-  const json = await res.json();
-  const url = json.data.files.edges[0]?.node?.url;
+  const data = await shopifyQuery(query);
+  const url = data.files.edges[0]?.node?.url;
   if (!url) return null;
-
   try {
     const feedRes = await fetch(url);
     return await feedRes.json();
@@ -185,11 +145,8 @@ async function fetchExistingFeed() {
 // ✅ Main handler
 export default async (req, res) => {
   const cookies = parseCookies(req);
-  const user = cookies.session;
-
-  if (!user) {
-    res.statusCode = 401;
-    res.json({ success: false, error: "Unauthorized" });
+  if (!cookies.session) {
+    res.status(401).json({ success: false, error: "Unauthorized" });
     return;
   }
 
@@ -197,17 +154,14 @@ export default async (req, res) => {
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      console.error("❌ Formidable error:", err);
       res.status(500).json({ success: false, error: err.message });
       return;
     }
 
     try {
-      if (!files.images) {
-        throw new Error("No images uploaded");
-      }
+      if (!files.images) throw new Error("No images uploaded");
 
-      // Load existing feed.json if available
+      // Load existing feed.json
       let existingFeed = await fetchExistingFeed();
       if (!existingFeed) existingFeed = { images: [] };
 
@@ -226,17 +180,11 @@ export default async (req, res) => {
       for (const file of fileArray) {
         counter++;
         const newName = `feed-${String(counter).padStart(3, "0")}.jpg`;
-        if (newFeed.includes(newName)) {
-          console.log("⚠️ Skipping duplicate:", newName);
-          continue;
-        }
+        if (newFeed.includes(newName)) continue;
 
         const newPath = path.join("/tmp", newName);
-
-        // Convert to JPEG
         await sharp(file.filepath).jpeg({ quality: 90 }).toFile(newPath);
 
-        // Shopify staged upload
         const stagedTarget = await getStagedUpload(newName, "image/jpeg");
         const resourceUrl = await uploadToS3(stagedTarget, newPath);
         await createShopifyFile(resourceUrl, newName, "IMAGE");
@@ -244,24 +192,23 @@ export default async (req, res) => {
         newFeed.push(newName);
       }
 
-      // Deduplicate feed.json
+      // Deduplicate
       const uniqueFeed = [...new Set(newFeed)];
 
-      // Save updated feed.json
+      // Save feed.json locally
       const feedJson = { images: uniqueFeed };
       const feedPath = path.join("/tmp", "feed.json");
       fs.writeFileSync(feedPath, JSON.stringify(feedJson, null, 2));
 
-      // Upload feed.json to Shopify as FILE
+      // Delete old feed.json before uploading new one
+      await deleteExistingFeed();
+
+      // Upload new feed.json
       const stagedTarget = await getStagedUpload("feed.json", "application/json");
       const resourceUrl = await uploadToS3(stagedTarget, feedPath);
-      const feedFile = await createShopifyFile(resourceUrl, "feed.json", "FILE");
+      await createShopifyFile(resourceUrl, "feed.json", "FILE");
 
-      res.json({
-        success: true,
-        images: uniqueFeed,
-        feedUrl: feedFile.url
-      });
+      res.json({ success: true, images: uniqueFeed });
     } catch (e) {
       console.error("❌ Upload error:", e);
       res.status(500).json({ success: false, error: e.message });
