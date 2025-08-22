@@ -31,8 +31,8 @@ export default async (req, res) => {
         <meta charset="UTF-8" />
         <title>Feed Uploader</title>
         <style>
-          body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; background: #f9f9f9; padding: 20px; }
-          img.logo { width: 250px; height: 250px; object-fit: contain; margin-bottom: 20px; }
+          body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 90vh; background: #f9f9f9; padding: 0 20px; }
+          img.logo { width: auto; height: 400px; object-fit: contain; margin-bottom: 20px; }
           h2 { margin: 10px 0 20px; }
           #dropzone { border: 3px dashed #aaa; padding: 50px; text-align: center; background: white; width: 400px; cursor: pointer; margin-bottom: 20px; }
           #dropzone.dragover { border-color: #333; background: #f0f0f0; }
@@ -43,7 +43,7 @@ export default async (req, res) => {
           @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
           #cancel-btn { margin-top: 10px; padding: 6px 12px; background: #c00; color: #fff; border: none; border-radius: 4px; cursor: pointer; display: none; }
           #cancel-btn:hover { background: #a00; }
-          a.logout { font-size: 14px; color: #c00; text-decoration: none; margin-top: auto; }
+          a.logout { font-size: 14px; color: #c00; text-decoration: none; margin-top: auto; position:absolute; }
         </style>
       </head>
       <body>
