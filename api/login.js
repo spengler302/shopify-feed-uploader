@@ -15,24 +15,33 @@ export default async (req, res) => {
       </form>
     `);
   } else if (req.method === "POST") {
+    // Collect the body safely
     let body = "";
-    req.on("data", (chunk) => (body += chunk));
-    req.on("end", () => {
-      const params = new URLSearchParams(body);
-      const username = params.get("username");
-      const password = params.get("password");
+    for await (const chunk of req) {
+      body += chunk;
+    }
 
-      if (username === USERNAME && password === PASSWORD) {
-        const token = createSession(username);
+    const params = new URLSearchParams(body);
+    const username = params.get("username");
+    const password = params.get("password");
 
-        // Set cookie
-        res.setHeader("Set-Cookie", `session=${token}; HttpOnly; Path=/; Secure; SameSite=Strict`);
-        res.writeHead(302, { Location: "/api/uploader" });
-        res.end();
-      } else {
-        res.statusCode = 401;
-        res.end("❌ Invalid credentials. <a href='/api/login'>Try again</a>");
-      }
-    });
+    if (username === USERNAME && password === PASSWORD) {
+      const token = createSession(username);
+
+      // Set secure cookie
+      res.setHeader(
+        "Set-Cookie",
+        `session=${token}; HttpOnly; Path=/; Secure; SameSite=Strict`
+      );
+
+      res.writeHead(302, { Location: "/api/uploader" });
+      res.end();
+    } else {
+      res.statusCode = 401;
+      res.end("❌ Invalid credentials. <a href='/api/login'>Try again</a>");
+    }
+  } else {
+    res.statusCode = 405;
+    res.end("Method not allowed");
   }
 };
