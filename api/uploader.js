@@ -1,25 +1,21 @@
+import { getSession } from "../lib/session.js";
+
 export default async (req, res) => {
-  const USERNAME = process.env.UPLOADER_USER;
-  const PASSWORD = process.env.UPLOADER_PASS;
+  const cookies = Object.fromEntries(
+    (req.headers.cookie || "")
+      .split(";")
+      .map((c) => c.trim().split("="))
+      .filter(([k, v]) => k && v)
+  );
 
-  // Require Basic Auth
-  const auth = req.headers.authorization || "";
-  const [scheme, encoded] = auth.split(" ");
-  if (scheme !== "Basic" || !encoded) {
-    res.setHeader("WWW-Authenticate", "Basic realm='Uploader'");
-    res.statusCode = 401;
-    res.end("Authentication required");
+  const session = getSession(cookies.session);
+
+  if (!session) {
+    res.writeHead(302, { Location: "/api/login" });
+    res.end();
     return;
   }
 
-  const [user, pass] = Buffer.from(encoded, "base64").toString().split(":");
-  if (user !== USERNAME || pass !== PASSWORD) {
-    res.statusCode = 401;
-    res.end("Invalid credentials");
-    return;
-  }
-
-  // Serve uploader page
   res.setHeader("Content-Type", "text/html");
   res.end(`
     <!DOCTYPE html>
@@ -28,13 +24,15 @@ export default async (req, res) => {
         <meta charset="UTF-8" />
         <title>Feed Uploader</title>
         <style>
-          body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f9f9f9; }
-          #dropzone { border: 3px dashed #aaa; padding: 50px; text-align: center; background: white; width: 400px; cursor: pointer; }
+          body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f9f9f9; }
+          #dropzone { border: 3px dashed #aaa; padding: 50px; text-align: center; background: white; width: 400px; cursor: pointer; margin-bottom: 20px; }
           #dropzone.dragover { border-color: #333; background: #f0f0f0; }
+          a.logout { font-size: 14px; color: #c00; text-decoration: none; }
         </style>
       </head>
       <body>
         <div id="dropzone">Drag & Drop Images Here</div>
+        <a href="/api/logout" class="logout">Logout</a>
         <script>
           const dropzone = document.getElementById("dropzone");
           dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("dragover"); });
@@ -45,10 +43,19 @@ export default async (req, res) => {
             const files = e.dataTransfer.files;
             const formData = new FormData();
             for (const file of files) formData.append("images", file);
-            const res = await fetch("/api/upload", { method: "POST", body: formData, headers: { Authorization: "Basic " + btoa("${USERNAME}:${PASSWORD}") } });
-            const data = await res.json();
-            if (data.success) alert("✅ Uploaded successfully!");
-            else alert("❌ Upload failed: " + data.error);
+
+            try {
+              const res = await fetch("/api/upload", { method: "POST", body: formData });
+              const data = await res.json();
+              if (data.success) {
+                alert("✅ Uploaded successfully!");
+              } else {
+                alert("❌ Upload failed: " + data.error);
+              }
+            } catch (err) {
+              console.error("Upload error:", err);
+              alert("❌ Upload failed: " + err.message);
+            }
           });
         </script>
       </body>

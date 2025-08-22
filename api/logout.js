@@ -1,6 +1,18 @@
+import { destroySession } from "../lib/session.js";
+
 export default async (req, res) => {
-  // Force browser to forget Basic Auth by sending a 401
-  res.setHeader("WWW-Authenticate", "Basic realm='Uploader'");
-  res.statusCode = 401;
-  res.end("Logged out. <a href='/api/login'>Login again</a>");
+  const cookies = Object.fromEntries(
+    (req.headers.cookie || "")
+      .split(";")
+      .map((c) => c.trim().split("="))
+      .filter(([k, v]) => k && v)
+  );
+
+  if (cookies.session) {
+    destroySession(cookies.session);
+  }
+
+  res.setHeader("Set-Cookie", "session=; HttpOnly; Path=/; Max-Age=0");
+  res.writeHead(302, { Location: "/api/login" });
+  res.end();
 };
