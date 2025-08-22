@@ -31,8 +31,19 @@ async function uploadFileToShopify(filePath, filename) {
   const query = `
     mutation fileCreate($files: [FileCreateInput!]!) {
       fileCreate(files: $files) {
-        files { preview { image { url } } }
-        userErrors { field message }
+        files {
+          id
+          fileStatus
+          preview {
+            image {
+              url
+            }
+          }
+        }
+        userErrors {
+          field
+          message
+        }
       }
     }
   `;
@@ -57,7 +68,14 @@ async function uploadFileToShopify(filePath, filename) {
     body: JSON.stringify({ query, variables })
   });
 
-  return res.json();
+  const json = await res.json();
+  console.log("📤 Shopify response:", JSON.stringify(json, null, 2));
+
+  if (json.data?.fileCreate?.userErrors?.length) {
+    throw new Error("Shopify error: " + JSON.stringify(json.data.fileCreate.userErrors));
+  }
+
+  return json;
 }
 
 export default async (req, res) => {
