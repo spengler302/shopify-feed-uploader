@@ -59,9 +59,7 @@ export default async (req, res) => {
                 const res = await fetch("/api/upload", { method: "POST", body: formData });
                 const data = await res.json();
                 if (data.success) {
-                    alert("✅ Uploaded successfully!");
-                    // ✅ Refresh grid
-                    loadFeed();
+                    alert("✅ Uploaded successfully! Refresh your storefront to see changes.");
                 } else {
                     alert("❌ Upload failed: " + data.error);
                 }
@@ -70,7 +68,12 @@ export default async (req, res) => {
                 alert("❌ Upload failed: " + err.message);
                 }
             });
-        </script>
+            </script>
+                        <a href="https://www.bootlegger.coffee/pages/bootleggersa-campaign" 
+            target="_blank" 
+            style="margin-top:20px;display:inline-block;padding:10px 20px;background:#333;color:#fff;text-decoration:none;border-radius:4px;">
+            🔗 View Updated Feed
+            </a>
       </body>
     </html>
   `);

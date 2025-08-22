@@ -7,7 +7,7 @@ export const config = { api: { bodyParser: false } };
 
 const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
 const SHOPIFY_TOKEN = process.env.SHOPIFY_TOKEN;
-const SHOPIFY_API = `https://${SHOPIFY_STORE}/admin/api/2025-01/graphql.json`;
+const THEME_ID = process.env.SHOPIFY_THEME_ID; // 👈 set this in Vercel env vars
 
 // ✅ Cookie parser
 function parseCookies(req) {
@@ -25,97 +25,56 @@ function parseCookies(req) {
   return list;
 }
 
-// ✅ Shopify GraphQL helper
-async function shopifyQuery(query, variables = {}) {
-  const res = await fetch(SHOPIFY_API, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": SHOPIFY_TOKEN
-    },
-    body: JSON.stringify({ query, variables })
-  });
-  const json = await res.json();
-  if (json.errors) throw new Error("Shopify error: " + JSON.stringify(json.errors));
-  return json.data;
-}
+// ✅ Upload asset to theme
+async function uploadThemeAsset(filename, filePath) {
+  const content = fs.readFileSync(filePath).toString("base64");
 
-// ✅ Get staged upload URL
-async function getStagedUpload(filename, mimeType) {
-  const query = `
-    mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
-      stagedUploadsCreate(input: $input) {
-        stagedTargets {
-          url
-          resourceUrl
-          parameters { name value }
-        }
-        userErrors { field message }
-      }
-    }
-  `;
-  const variables = {
-    input: [{ filename, mimeType, resource: "FILE", httpMethod: "POST" }]
-  };
-  const data = await shopifyQuery(query, variables);
-  if (data.stagedUploadsCreate.userErrors.length) {
-    throw new Error("Staged upload error: " + JSON.stringify(data.stagedUploadsCreate.userErrors));
-  }
-  return data.stagedUploadsCreate.stagedTargets[0];
-}
-
-// ✅ Upload to S3
-async function uploadToS3(stagedTarget, filePath) {
-  const formData = new FormData();
-  stagedTarget.parameters.forEach((p) => formData.append(p.name, p.value));
-  formData.append("file", new Blob([fs.readFileSync(filePath)]));
-  const res = await fetch(stagedTarget.url, { method: "POST", body: formData });
-  if (!res.ok) throw new Error("S3 upload failed: " + (await res.text()));
-  return stagedTarget.resourceUrl;
-}
-
-// ✅ Create file in Shopify
-async function createShopifyFile(resourceUrl, alt, type = "IMAGE") {
-  const query = `
-    mutation fileCreate($files: [FileCreateInput!]!) {
-      fileCreate(files: $files) {
-        files {
-          id
-          alt
-          ${type === "IMAGE" ? "preview { image { url } }" : ""}
-        }
-        userErrors { field message }
-      }
-    }
-  `;
-  const variables = {
-    files: [{ alt, contentType: type, originalSource: resourceUrl }]
-  };
-  const data = await shopifyQuery(query, variables);
-  if (data.fileCreate.userErrors.length) {
-    throw new Error("fileCreate error: " + JSON.stringify(data.fileCreate.userErrors));
-  }
-  return data.fileCreate.files[0];
-}
-
-// ✅ Fetch existing feed.json (latest one)
-async function fetchExistingFeed() {
-  const query = `
+  const res = await fetch(
+    `https://${SHOPIFY_STORE}/admin/api/2025-01/themes/${THEME_ID}/assets.json`,
     {
-      files(first: 1, query: "filename:feed") {
-        edges { node { ... on GenericFile { url } } }
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN
+      },
+      body: JSON.stringify({
+        asset: {
+          key: `assets/${filename}`,
+          attachment: content
+        }
+      })
+    }
+  );
+
+  const json = await res.json();
+  if (json.errors) {
+    throw new Error("Theme asset upload error: " + JSON.stringify(json.errors));
+  }
+  return json.asset;
+}
+
+// ✅ Fetch existing feed.json
+async function fetchExistingFeed() {
+  const res = await fetch(
+    `https://${SHOPIFY_STORE}/admin/api/2025-01/themes/${THEME_ID}/assets.json?asset[key]=assets/feed.json`,
+    {
+      headers: {
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN
       }
     }
-  `;
-  const data = await shopifyQuery(query);
-  const url = data.files.edges[0]?.node?.url;
-  if (!url) return null;
-  try {
-    const feedRes = await fetch(url);
-    return await feedRes.json();
-  } catch {
-    return null;
+  );
+
+  if (res.status === 404) return { images: [] };
+
+  const json = await res.json();
+  if (json.asset && json.asset.value) {
+    try {
+      return JSON.parse(json.asset.value);
+    } catch {
+      return { images: [] };
+    }
   }
+  return { images: [] };
 }
 
 // ✅ Main handler
@@ -161,10 +120,7 @@ export default async (req, res) => {
         const newPath = path.join("/tmp", newName);
         await sharp(file.filepath).jpeg({ quality: 90 }).toFile(newPath);
 
-        const stagedTarget = await getStagedUpload(newName, "image/jpeg");
-        const resourceUrl = await uploadToS3(stagedTarget, newPath);
-        await createShopifyFile(resourceUrl, newName, "IMAGE");
-
+        await uploadThemeAsset(newName, newPath);
         newFeed.push(newName);
       }
 
@@ -176,10 +132,8 @@ export default async (req, res) => {
       const feedPath = path.join("/tmp", "feed.json");
       fs.writeFileSync(feedPath, JSON.stringify(feedJson, null, 2));
 
-      // Upload new feed.json (Shopify will rename, but we always fetch latest)
-      const stagedTarget = await getStagedUpload("feed.json", "application/json");
-      const resourceUrl = await uploadToS3(stagedTarget, feedPath);
-      await createShopifyFile(resourceUrl, "feed.json", "FILE");
+      // Upload feed.json
+      await uploadThemeAsset("feed.json", feedPath);
 
       res.json({ success: true, images: uniqueFeed });
     } catch (e) {
