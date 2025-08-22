@@ -31,10 +31,11 @@ export default async (req, res) => {
         <meta charset="UTF-8" />
         <title>Feed Uploader</title>
         <style>
-          body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f9f9f9; }
+          body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; background: #f9f9f9; padding: 20px; }
+          img.logo { width: 250px; height: 250px; object-fit: contain; margin-bottom: 20px; }
+          h2 { margin: 10px 0 20px; }
           #dropzone { border: 3px dashed #aaa; padding: 50px; text-align: center; background: white; width: 400px; cursor: pointer; margin-bottom: 20px; }
           #dropzone.dragover { border-color: #333; background: #f0f0f0; }
-          a.logout { font-size: 14px; color: #c00; text-decoration: none; }
           #progress-container { width: 400px; background: #eee; border-radius: 4px; margin-top: 15px; height: 20px; overflow: hidden; display: none; position: relative; }
           #progress-bar { height: 100%; width: 0%; background: #4caf50; transition: width 0.3s; }
           #progress-text { margin-top: 8px; font-size: 14px; color: #333; }
@@ -42,15 +43,18 @@ export default async (req, res) => {
           @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
           #cancel-btn { margin-top: 10px; padding: 6px 12px; background: #c00; color: #fff; border: none; border-radius: 4px; cursor: pointer; display: none; }
           #cancel-btn:hover { background: #a00; }
+          a.logout { font-size: 14px; color: #c00; text-decoration: none; margin-top: auto; }
         </style>
       </head>
       <body>
+        <!-- ✅ Logo placeholder -->
+        <img src="https://cdn.shopify.com/s/files/1/0561/2276/9591/files/Banner_2_abed2b31-923c-48ba-ad97-1f0125ae8896.jpg?v=1755855209" alt="Logo" />
+
         <h2>Welcome, ${user}</h2>
         <div id="dropzone">Drag & Drop Images Here</div>
         <div id="progress-container"><div id="progress-bar"></div></div>
         <div id="progress-text"></div>
         <button id="cancel-btn">Cancel Uploads</button>
-        <a href="/api/logout" class="logout">Logout</a>
 
         <script>
           const dropzone = document.getElementById("dropzone");
@@ -125,6 +129,9 @@ export default async (req, res) => {
           style="margin-top:20px;display:inline-block;padding:10px 20px;background:#333;color:#fff;text-decoration:none;border-radius:4px;">
           🔗 View Updated Feed
         </a>
+
+        <!-- ✅ Logout moved to bottom -->
+        <a href="/api/logout" class="logout">Logout</a>
       </body>
     </html>
   `);
