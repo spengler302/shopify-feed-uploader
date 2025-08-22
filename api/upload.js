@@ -73,35 +73,51 @@ export default async (req, res) => {
   const form = formidable({ multiples: true, uploadDir: "/tmp", keepExtensions: true });
 
   form.parse(req, async (err, fields, files) => {
-    if (err) {
-      res.status(500).json({ success: false, error: err.message });
-      return;
+  if (err) {
+    console.error("❌ Formidable error:", err);
+    res.status(500).json({ success: false, error: err.message });
+    return;
+  }
+
+  console.log("📂 Parsed files:", files);
+
+  try {
+    if (!files.images) {
+      throw new Error("No images uploaded");
     }
 
-    try {
-      const fileArray = Array.isArray(files.images) ? files.images : [files.images];
-      const newFeed = [];
+    const fileArray = Array.isArray(files.images) ? files.images : [files.images];
+    const newFeed = [];
 
-      let counter = 0;
-      for (const file of fileArray) {
-        counter++;
-        const newName = `feed-${String(counter).padStart(3, "0")}.jpg`;
-        const newPath = path.join("/tmp", newName);
+    let counter = 0;
+    for (const file of fileArray) {
+      console.log("➡️ Processing file:", file.originalFilename, "at", file.filepath);
 
-        await sharp(file.filepath).jpeg({ quality: 90 }).toFile(newPath);
-        await uploadFileToShopify(newPath, newName);
-        newFeed.push(newName);
-      }
+      counter++;
+      const newName = `feed-${String(counter).padStart(3, "0")}.jpg`;
+      const newPath = path.join("/tmp", newName);
 
-      // Save feed.json
-      const feedJson = { images: newFeed };
-      const feedPath = path.join("/tmp", "feed.json");
-      fs.writeFileSync(feedPath, JSON.stringify(feedJson, null, 2));
-      await uploadFileToShopify(feedPath, "feed.json");
+      // Convert to JPEG
+      await sharp(file.filepath).jpeg({ quality: 90 }).toFile(newPath);
+      console.log("✅ Converted to JPEG:", newPath);
 
-      res.json({ success: true, images: newFeed });
-    } catch (e) {
-      res.status(500).json({ success: false, error: e.message });
+      // Upload to Shopify
+      const result = await uploadFileToShopify(newPath, newName);
+      console.log("📤 Shopify response:", JSON.stringify(result, null, 2));
+
+      newFeed.push(newName);
     }
-  });
+
+    // Save feed.json
+    const feedJson = { images: newFeed };
+    const feedPath = path.join("/tmp", "feed.json");
+    fs.writeFileSync(feedPath, JSON.stringify(feedJson, null, 2));
+    await uploadFileToShopify(feedPath, "feed.json");
+
+    res.json({ success: true, images: newFeed });
+  } catch (e) {
+    console.error("❌ Upload error:", e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
 };
