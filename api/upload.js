@@ -46,12 +46,18 @@ async function uploadThemeAsset(filename, filePath) {
     }
   );
 
-  const json = await res.json();
-  if (json.errors) {
-    console.error("❌ Theme asset upload error:", json.errors);
-    throw new Error("Theme asset upload error: " + JSON.stringify(json.errors));
+  let text = await res.text(); // get raw response
+  try {
+    const json = JSON.parse(text);
+    if (json.errors) {
+      console.error("❌ Theme asset upload error:", json.errors);
+      throw new Error("Theme asset upload error: " + JSON.stringify(json.errors));
+    }
+    return json.asset;
+  } catch (err) {
+    console.error("❌ Non-JSON response from Shopify:", text);
+    throw new Error("Unexpected response from Shopify. Check API scopes and theme_id.");
   }
-  return json.asset;
 }
 
 // ✅ Fetch existing feed.json
