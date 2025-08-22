@@ -6,7 +6,7 @@ export default async (req, res) => {
   try {
     const query = `
       {
-        files(first: 1, query: "filename:feed.json") {
+        files(first: 1, query: "filename:feed") {
           edges {
             node {
               ... on GenericFile {
@@ -35,7 +35,6 @@ export default async (req, res) => {
       return;
     }
 
-    // Fetch feed.json from Shopify CDN
     const feedRes = await fetch(url);
     if (!feedRes.ok) {
       throw new Error("Failed to fetch feed.json from Shopify CDN");
@@ -44,7 +43,7 @@ export default async (req, res) => {
     const feedJson = await feedRes.json();
 
     // ✅ Extract CDN base dynamically
-    const cdnBase = url.replace(/feed\.json.*/, "");
+    const cdnBase = url.replace(/feed.*$/, "");
 
     res.setHeader("Content-Type", "application/json");
     res.status(200).json({ ...feedJson, cdnBase });

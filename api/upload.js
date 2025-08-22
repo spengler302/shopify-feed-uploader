@@ -98,35 +98,11 @@ async function createShopifyFile(resourceUrl, alt, type = "IMAGE") {
   return data.fileCreate.files[0];
 }
 
-// ✅ Delete existing feed.json
-async function deleteExistingFeed() {
-  const query = `
-    {
-      files(first: 1, query: "filename:feed.json") {
-        edges { node { id } }
-      }
-    }
-  `;
-  const data = await shopifyQuery(query);
-  const id = data.files.edges[0]?.node?.id;
-  if (id) {
-    const delQuery = `
-      mutation fileDelete($id: ID!) {
-        fileDelete(id: $id) {
-          deletedFileId
-          userErrors { field message }
-        }
-      }
-    `;
-    await shopifyQuery(delQuery, { id });
-  }
-}
-
-// ✅ Fetch existing feed.json
+// ✅ Fetch existing feed.json (latest one)
 async function fetchExistingFeed() {
   const query = `
     {
-      files(first: 1, query: "filename:feed.json") {
+      files(first: 1, query: "filename:feed") {
         edges { node { ... on GenericFile { url } } }
       }
     }
@@ -200,31 +176,7 @@ export default async (req, res) => {
       const feedPath = path.join("/tmp", "feed.json");
       fs.writeFileSync(feedPath, JSON.stringify(feedJson, null, 2));
 
-     // ✅ Delete existing feed.json
-        async function deleteExistingFeed() {
-        const query = `
-            {
-            files(first: 1, query: "filename:feed.json") {
-                edges { node { id } }
-            }
-            }
-        `;
-        const data = await shopifyQuery(query);
-        const id = data.files.edges[0]?.node?.id;
-        if (id) {
-            const delQuery = `
-            mutation fileDelete($fileIds: [ID!]!) {
-                fileDelete(fileIds: $fileIds) {
-                deletedFileIds
-                userErrors { field message }
-                }
-            }
-            `;
-            await shopifyQuery(delQuery, { fileIds: [id] });
-        }
-        }
-
-      // Upload new feed.json
+      // Upload new feed.json (Shopify will rename, but we always fetch latest)
       const stagedTarget = await getStagedUpload("feed.json", "application/json");
       const resourceUrl = await uploadToS3(stagedTarget, feedPath);
       await createShopifyFile(resourceUrl, "feed.json", "FILE");
