@@ -89,8 +89,8 @@ async function uploadToS3(stagedTarget, filePath) {
   return stagedTarget.resourceUrl;
 }
 
-// ✅ Step 3: Register file in Shopify
-async function createShopifyFile(resourceUrl, alt) {
+// ✅ Step 3: Register file in Shopify (IMAGE or FILE)
+async function createShopifyFile(resourceUrl, alt, type = "IMAGE") {
   const query = `
     mutation fileCreate($files: [FileCreateInput!]!) {
       fileCreate(files: $files) {
@@ -104,7 +104,7 @@ async function createShopifyFile(resourceUrl, alt) {
     files: [
       {
         alt,
-        contentType: "IMAGE",
+        contentType: type, // IMAGE or FILE
         originalSource: resourceUrl
       }
     ]
@@ -219,7 +219,7 @@ export default async (req, res) => {
         // Shopify staged upload
         const stagedTarget = await getStagedUpload(newName, "image/jpeg");
         const resourceUrl = await uploadToS3(stagedTarget, newPath);
-        const shopifyFile = await createShopifyFile(resourceUrl, newName);
+        const shopifyFile = await createShopifyFile(resourceUrl, newName, "IMAGE");
 
         console.log("📤 Shopify fileCreate response:", JSON.stringify(shopifyFile, null, 2));
 
@@ -231,10 +231,10 @@ export default async (req, res) => {
       const feedPath = path.join("/tmp", "feed.json");
       fs.writeFileSync(feedPath, JSON.stringify(feedJson, null, 2));
 
-      // Upload feed.json to Shopify
+      // Upload feed.json to Shopify as FILE
       const stagedTarget = await getStagedUpload("feed.json", "application/json");
       const resourceUrl = await uploadToS3(stagedTarget, feedPath);
-      await createShopifyFile(resourceUrl, "feed.json");
+      await createShopifyFile(resourceUrl, "feed.json", "FILE");
 
       res.json({ success: true, images: newFeed });
     } catch (e) {
