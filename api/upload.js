@@ -48,6 +48,7 @@ async function uploadThemeAsset(filename, filePath) {
 
   const json = await res.json();
   if (json.errors) {
+    console.error("❌ Theme asset upload error:", json.errors);
     throw new Error("Theme asset upload error: " + JSON.stringify(json.errors));
   }
   return json.asset;
