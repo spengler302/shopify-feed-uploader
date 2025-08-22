@@ -4,6 +4,8 @@ export default async (req, res) => {
   const USERNAME = process.env.UPLOADER_USER;
   const PASSWORD = process.env.UPLOADER_PASS;
 
+  console.log("➡️ Request to /api/login", req.method);
+
   if (req.method === "GET") {
     res.setHeader("Content-Type", "text/html");
     res.end(`
@@ -15,28 +17,33 @@ export default async (req, res) => {
       </form>
     `);
   } else if (req.method === "POST") {
-    // Collect the body safely
     let body = "";
     for await (const chunk of req) {
       body += chunk;
     }
 
+    console.log("📩 Raw body:", body);
+
     const params = new URLSearchParams(body);
     const username = params.get("username");
     const password = params.get("password");
 
+    console.log("👤 Login attempt:", username, password ? "[password entered]" : "[no password]");
+
     if (username === USERNAME && password === PASSWORD) {
       const token = createSession(username);
 
-      // Set secure cookie
       res.setHeader(
         "Set-Cookie",
         `session=${token}; HttpOnly; Path=/; Secure; SameSite=Strict`
       );
 
+      console.log("✅ Login success, redirecting to /api/uploader");
+
       res.writeHead(302, { Location: "/api/uploader" });
       res.end();
     } else {
+      console.log("❌ Login failed");
       res.statusCode = 401;
       res.end("❌ Invalid credentials. <a href='/api/login'>Try again</a>");
     }
