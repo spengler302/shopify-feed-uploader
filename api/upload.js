@@ -1,9 +1,23 @@
-import { getSession } from "../lib/session.js";
 import formidable from "formidable";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
 import fetch from "node-fetch";
+
+function parseCookies(req) {
+  const list = {};
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return list;
+  cookieHeader.split(";").forEach(function (cookie) {
+    let [name, ...rest] = cookie.split("=");
+    name = name?.trim();
+    if (!name) return;
+    const value = rest.join("=").trim();
+    if (!value) return;
+    list[name] = decodeURIComponent(value);
+  });
+  return list;
+}
 
 export const config = { api: { bodyParser: false } };
 
@@ -47,15 +61,10 @@ async function uploadFileToShopify(filePath, filename) {
 }
 
 export default async (req, res) => {
-  const cookies = Object.fromEntries(
-    (req.headers.cookie || "")
-      .split(";")
-      .map((c) => c.trim().split("="))
-      .filter(([k, v]) => k && v)
-  );
+  const cookies = parseCookies(req);
+  const user = cookies.session;
 
-  const session = getSession(cookies.session);
-  if (!session) {
+  if (!user) {
     res.statusCode = 401;
     res.json({ success: false, error: "Unauthorized" });
     return;
