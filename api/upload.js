@@ -94,7 +94,7 @@ async function createShopifyFile(resourceUrl, alt, type = "IMAGE") {
   const query = `
     mutation fileCreate($files: [FileCreateInput!]!) {
       fileCreate(files: $files) {
-        files { id preview { image { url } } }
+        files { id url preview { image { url } } }
         userErrors { field message }
       }
     }
@@ -219,9 +219,7 @@ export default async (req, res) => {
         // Shopify staged upload
         const stagedTarget = await getStagedUpload(newName, "image/jpeg");
         const resourceUrl = await uploadToS3(stagedTarget, newPath);
-        const shopifyFile = await createShopifyFile(resourceUrl, newName, "IMAGE");
-
-        console.log("📤 Shopify fileCreate response:", JSON.stringify(shopifyFile, null, 2));
+        await createShopifyFile(resourceUrl, newName, "IMAGE");
 
         newFeed.push(newName);
       }
@@ -234,9 +232,14 @@ export default async (req, res) => {
       // Upload feed.json to Shopify as FILE
       const stagedTarget = await getStagedUpload("feed.json", "application/json");
       const resourceUrl = await uploadToS3(stagedTarget, feedPath);
-      await createShopifyFile(resourceUrl, "feed.json", "FILE");
+      const feedFile = await createShopifyFile(resourceUrl, "feed.json", "FILE");
 
-      res.json({ success: true, images: newFeed });
+      // ✅ Return CDN URL of feed.json
+      res.json({
+        success: true,
+        images: newFeed,
+        feedUrl: feedFile.url
+      });
     } catch (e) {
       console.error("❌ Upload error:", e);
       res.status(500).json({ success: false, error: e.message });

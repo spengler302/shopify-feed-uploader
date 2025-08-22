@@ -4,7 +4,6 @@ const SHOPIFY_API = `https://${SHOPIFY_STORE}/admin/api/2025-01/graphql.json`;
 
 export default async (req, res) => {
   try {
-    // 1. Query Shopify for feed.json file
     const query = `
       {
         files(first: 1, query: "filename:feed.json") {
@@ -36,7 +35,6 @@ export default async (req, res) => {
       return;
     }
 
-    // 2. Fetch the actual feed.json from Shopify CDN
     const feedRes = await fetch(url);
     if (!feedRes.ok) {
       throw new Error("Failed to fetch feed.json from Shopify CDN");
@@ -44,7 +42,6 @@ export default async (req, res) => {
 
     const feedJson = await feedRes.json();
 
-    // 3. Return JSON to frontend
     res.setHeader("Content-Type", "application/json");
     res.status(200).json(feedJson);
   } catch (err) {
