@@ -1,6 +1,7 @@
 {
   "name": "shopify-feed-uploader",
   "version": "1.0.0",
+  "type": "module",
   "dependencies": {
     "formidable": "^3.5.1",
     "node-fetch": "^3.3.2",
