@@ -1,0 +1,34 @@
+export default async (req, res) => {
+  const USERNAME = process.env.UPLOADER_USER;
+  const PASSWORD = process.env.UPLOADER_PASS;
+
+  if (req.method === "GET") {
+    // Show login form
+    res.setHeader("Content-Type", "text/html");
+    res.end(`
+      <form method="POST" style="max-width:300px;margin:100px auto;font-family:sans-serif;">
+        <h2>Login</h2>
+        <input type="text" name="username" placeholder="Username" style="width:100%;margin-bottom:10px;padding:8px;" />
+        <input type="password" name="password" placeholder="Password" style="width:100%;margin-bottom:10px;padding:8px;" />
+        <button type="submit" style="width:100%;padding:8px;">Login</button>
+      </form>
+    `);
+  } else if (req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => {
+      const params = new URLSearchParams(body);
+      const username = params.get("username");
+      const password = params.get("password");
+
+      if (username === USERNAME && password === PASSWORD) {
+        // Redirect to uploader with Basic Auth header hint
+        res.writeHead(302, { Location: "/api/uploader" });
+        res.end();
+      } else {
+        res.statusCode = 401;
+        res.end("❌ Invalid credentials. <a href='/api/login'>Try again</a>");
+      }
+    });
+  }
+};
