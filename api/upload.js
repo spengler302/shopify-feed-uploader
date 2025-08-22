@@ -61,6 +61,9 @@ async function getStagedUpload(filename, mimeType) {
   });
 
   const json = await res.json();
+  if (json.errors) {
+    throw new Error("Shopify GraphQL error: " + JSON.stringify(json.errors));
+  }
   if (json.data.stagedUploadsCreate.userErrors.length) {
     throw new Error(
       "Shopify staged upload error: " +
@@ -104,7 +107,7 @@ async function createShopifyFile(resourceUrl, alt, type = "IMAGE") {
     files: [
       {
         alt,
-        contentType: type, // IMAGE or FILE
+        contentType: type,
         originalSource: resourceUrl
       }
     ]
@@ -120,6 +123,14 @@ async function createShopifyFile(resourceUrl, alt, type = "IMAGE") {
   });
 
   const json = await res.json();
+  console.log("📤 Shopify fileCreate response:", JSON.stringify(json, null, 2));
+
+  if (json.errors) {
+    throw new Error("Shopify GraphQL error: " + JSON.stringify(json.errors));
+  }
+  if (!json.data || !json.data.fileCreate) {
+    throw new Error("Invalid Shopify response: " + JSON.stringify(json));
+  }
   if (json.data.fileCreate.userErrors.length) {
     throw new Error(
       "Shopify fileCreate error: " +
@@ -211,6 +222,11 @@ export default async (req, res) => {
       for (const file of fileArray) {
         counter++;
         const newName = `feed-${String(counter).padStart(3, "0")}.jpg`;
+        if (newFeed.includes(newName)) {
+          console.log("⚠️ Skipping duplicate:", newName);
+          continue;
+        }
+
         const newPath = path.join("/tmp", newName);
 
         // Convert to JPEG
@@ -224,8 +240,11 @@ export default async (req, res) => {
         newFeed.push(newName);
       }
 
+      // Deduplicate feed.json
+      const uniqueFeed = [...new Set(newFeed)];
+
       // Save updated feed.json
-      const feedJson = { images: newFeed };
+      const feedJson = { images: uniqueFeed };
       const feedPath = path.join("/tmp", "feed.json");
       fs.writeFileSync(feedPath, JSON.stringify(feedJson, null, 2));
 
@@ -234,10 +253,9 @@ export default async (req, res) => {
       const resourceUrl = await uploadToS3(stagedTarget, feedPath);
       const feedFile = await createShopifyFile(resourceUrl, "feed.json", "FILE");
 
-      // ✅ Return CDN URL of feed.json
       res.json({
         success: true,
-        images: newFeed,
+        images: uniqueFeed,
         feedUrl: feedFile.url
       });
     } catch (e) {
