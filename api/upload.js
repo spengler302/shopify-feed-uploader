@@ -97,7 +97,11 @@ async function createShopifyFile(resourceUrl, alt, type = "IMAGE") {
   const query = `
     mutation fileCreate($files: [FileCreateInput!]!) {
       fileCreate(files: $files) {
-        files { id url preview { image { url } } }
+        files {
+          id
+          alt
+          ${type === "IMAGE" ? "preview { image { url } }" : ""}
+        }
         userErrors { field message }
       }
     }
@@ -107,7 +111,7 @@ async function createShopifyFile(resourceUrl, alt, type = "IMAGE") {
     files: [
       {
         alt,
-        contentType: type,
+        contentType: type, // IMAGE or FILE
         originalSource: resourceUrl
       }
     ]
