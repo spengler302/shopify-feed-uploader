@@ -42,29 +42,34 @@ export default async (req, res) => {
         <div id="dropzone">Drag & Drop Images Here</div>
         <a href="/api/logout" class="logout">Logout</a>
         <script>
-          const dropzone = document.getElementById("dropzone");
-          dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("dragover"); });
-          dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
-          dropzone.addEventListener("drop", async e => {
-            e.preventDefault();
-            dropzone.classList.remove("dragover");
-            const files = e.dataTransfer.files;
-            const formData = new FormData();
-            for (const file of files) formData.append("images", file);
+            const dropzone = document.getElementById("dropzone");
+            dropzone.addEventListener("dragover", e => {
+                e.preventDefault();
+                dropzone.classList.add("dragover");
+            });
+            dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+            dropzone.addEventListener("drop", async e => {
+                e.preventDefault();
+                dropzone.classList.remove("dragover");
+                const files = e.dataTransfer.files;
+                const formData = new FormData();
+                for (const file of files) formData.append("images", file);
 
-            try {
-              const res = await fetch("/api/upload", { method: "POST", body: formData });
-              const data = await res.json();
-              if (data.success) {
-                alert("✅ Uploaded successfully!");
-              } else {
-                alert("❌ Upload failed: " + data.error);
-              }
-            } catch (err) {
-              console.error("Upload error:", err);
-              alert("❌ Upload failed: " + err.message);
-            }
-          });
+                try {
+                const res = await fetch("/api/upload", { method: "POST", body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    alert("✅ Uploaded successfully!");
+                    // ✅ Refresh grid
+                    loadFeed();
+                } else {
+                    alert("❌ Upload failed: " + data.error);
+                }
+                } catch (err) {
+                console.error("Upload error:", err);
+                alert("❌ Upload failed: " + err.message);
+                }
+            });
         </script>
       </body>
     </html>
