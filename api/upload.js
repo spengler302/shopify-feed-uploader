@@ -200,8 +200,29 @@ export default async (req, res) => {
       const feedPath = path.join("/tmp", "feed.json");
       fs.writeFileSync(feedPath, JSON.stringify(feedJson, null, 2));
 
-      // Delete old feed.json before uploading new one
-      await deleteExistingFeed();
+     // ✅ Delete existing feed.json
+        async function deleteExistingFeed() {
+        const query = `
+            {
+            files(first: 1, query: "filename:feed.json") {
+                edges { node { id } }
+            }
+            }
+        `;
+        const data = await shopifyQuery(query);
+        const id = data.files.edges[0]?.node?.id;
+        if (id) {
+            const delQuery = `
+            mutation fileDelete($fileIds: [ID!]!) {
+                fileDelete(fileIds: $fileIds) {
+                deletedFileIds
+                userErrors { field message }
+                }
+            }
+            `;
+            await shopifyQuery(delQuery, { fileIds: [id] });
+        }
+        }
 
       // Upload new feed.json
       const stagedTarget = await getStagedUpload("feed.json", "application/json");
