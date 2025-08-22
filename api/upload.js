@@ -130,6 +130,43 @@ async function createShopifyFile(resourceUrl, alt) {
   return json.data.fileCreate.files[0];
 }
 
+// ✅ Step 4: Try to fetch existing feed.json from Shopify
+async function fetchExistingFeed() {
+  const query = `
+    {
+      files(first: 1, query: "filename:feed.json") {
+        edges {
+          node {
+            ... on GenericFile {
+              url
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const res = await fetch(SHOPIFY_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": SHOPIFY_TOKEN
+    },
+    body: JSON.stringify({ query })
+  });
+
+  const json = await res.json();
+  const url = json.data.files.edges[0]?.node?.url;
+  if (!url) return null;
+
+  try {
+    const feedRes = await fetch(url);
+    return await feedRes.json();
+  } catch {
+    return null;
+  }
+}
+
 // ✅ Main handler
 export default async (req, res) => {
   const cookies = parseCookies(req);
@@ -155,10 +192,22 @@ export default async (req, res) => {
         throw new Error("No images uploaded");
       }
 
-      const fileArray = Array.isArray(files.images) ? files.images : [files.images];
-      const newFeed = [];
+      // Load existing feed.json if available
+      let existingFeed = await fetchExistingFeed();
+      if (!existingFeed) existingFeed = { images: [] };
 
-      let counter = 0;
+      // Find last index
+      let lastIndex = 0;
+      if (existingFeed.images.length > 0) {
+        const lastFile = existingFeed.images[existingFeed.images.length - 1];
+        const match = lastFile.match(/feed-(\d+)\.jpg/);
+        if (match) lastIndex = parseInt(match[1], 10);
+      }
+
+      const fileArray = Array.isArray(files.images) ? files.images : [files.images];
+      const newFeed = [...existingFeed.images];
+
+      let counter = lastIndex;
       for (const file of fileArray) {
         counter++;
         const newName = `feed-${String(counter).padStart(3, "0")}.jpg`;
@@ -172,11 +221,12 @@ export default async (req, res) => {
         const resourceUrl = await uploadToS3(stagedTarget, newPath);
         const shopifyFile = await createShopifyFile(resourceUrl, newName);
 
-        console.log("✅ Uploaded to Shopify:", shopifyFile.preview.image.url);
+        console.log("📤 Shopify fileCreate response:", JSON.stringify(shopifyFile, null, 2));
+
         newFeed.push(newName);
       }
 
-      // Save feed.json locally
+      // Save updated feed.json
       const feedJson = { images: newFeed };
       const feedPath = path.join("/tmp", "feed.json");
       fs.writeFileSync(feedPath, JSON.stringify(feedJson, null, 2));
